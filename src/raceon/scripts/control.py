@@ -18,8 +18,16 @@ class Controller():
         # Parameters for control
         self.motor_speed = rospy.get_param("~motor_speed", 200)
         self.target = rospy.get_param("~target", 0)
-        self.kp = rospy.get_param("~kp", 1)
-    
+        self.kp = rospy.get_param("~kp", 10)
+        
+        # Yuzhou Added
+        self.Ki = rospy.get_param('~Ki',10)
+        self.Kd = rospy.get_param('~Kd',0.001)
+        self.prev_pid_time = rospy.Time.now()
+        self.integral = 0
+        self.derivative = 0
+        self.previous_error = 0
+        
     def start(self):
         self.sub_pos_err = rospy.Subscriber(self.topic_name_pos_err, Pose, self.pos_err_callback)
         self.pub_control = rospy.Publisher(self.topic_name_control, AckermannDrive, queue_size=10)
@@ -42,7 +50,21 @@ class Controller():
         
     # TODO: Implement PID
     def pid(self, error):
-        return error * self.kp
+        
+        pid_dt_duration = rospy.Time.now() - self.prev_pid_time
+        self.pid_dt = pid_dt_duration.to_sec()
+        self.prev_pid_time = rospy.Time.now()
+        self.derivative = (error - self.previous_error) / pid_dt
+        self.integral = self.integral + (error * pid_dt)
+        self.previous_error = error
+        self.Kpid = (self.Kp * error) + (self.Ki * self.integral) + (self.Kd * self.derivative)
+     
+        return self.Kpid
+        
+        
+        
+        
+        
 
     def control_servo(self, error):
         correction = self.pid(error)
@@ -50,8 +72,15 @@ class Controller():
 
         if servo_pos > SERVO_MAX:
             servo_pos = SERVO_MAX
+            
+            # Yuzhou Added
+            self.integral = self.integral - (error * self.pid_dt)
+            
         if servo_pos < SERVO_MIN:
             servo_pos = SERVO_MIN
+            
+            #Yuzhou Added
+            self.integral = self.integral - (error * self.pid_dt)
 
         return servo_pos
 
