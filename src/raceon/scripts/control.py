@@ -9,6 +9,7 @@ SERVO_MIN = -900
 SERVO_MIDDLE = 0
 SERVO_MAX = 900
 
+
 class Controller():
     
     def __init__(self):
@@ -27,6 +28,10 @@ class Controller():
         self.integral = 0
         self.derivative = 0
         self.previous_error = 0
+        self.state = 0
+        
+
+
         
     def start(self):
         self.sub_pos_err = rospy.Subscriber(self.topic_name_pos_err, Pose, self.pos_err_callback)
@@ -50,12 +55,34 @@ class Controller():
         
     # TODO: Implement PID
     def pid(self, error):
+        if (abs(error) >= 100) and (self.state != 2):
+            self.Kp = 8000
+            self.Kd = 300
+            self.Ki = 250
+            self.state = 2
+            motor.duty_cycle = MOTOR_BRAKE + 270000
+        
+        if (abs(error) >= 30) and (self.state != 1):
+            self.Kp = 7200
+            self.Kd = 180
+            self.Ki = 90
+            self.state = 1
+            motor.duty_cycle = MOTOR_BRAKE + 270000
+            self.integral = 0
+
+        if (abs(error) < 30) and (self.state != 0):
+            self.Kp = 7500
+            self.Kd = 200
+            self.Ki = 120
+            self.state = 0
+            motor.duty_cycle = MOTOR_BRAKE + 320000
+            self.integral = 0
         
         pid_dt_duration = rospy.Time.now() - self.prev_pid_time
         self.pid_dt = pid_dt_duration.to_sec()
         self.prev_pid_time = rospy.Time.now()
-        self.derivative = (error - self.previous_error) / pid_dt
-        self.integral = self.integral + (error * pid_dt)
+        self.derivative = (error - self.previous_error) / self.pid_dt
+        self.integral = self.integral + (error * self.pid_dt)
         self.previous_error = error
         self.Kpid = (self.Kp * error) + (self.Ki * self.integral) + (self.Kd * self.derivative)
      
@@ -63,7 +90,7 @@ class Controller():
         
         
         
-        
+
         
 
     def control_servo(self, error):
